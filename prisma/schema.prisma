@@ -1,0 +1,67 @@
+// Prisma schema for CS2 Portfolio Tracker
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// Модель пользователя
+model User {
+  id            String          @id @default(cuid())
+  email         String          @unique
+  name          String?
+  password      String
+  currency      String          @default("RUB") // RUB, USD, EUR
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  portfolioItems PortfolioItem[]
+  priceHistories PriceHistory[]
+}
+
+// Предмет в портфеле пользователя
+model PortfolioItem {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  name          String
+  category      String   // knife, case, skin, sticker, charm, etc.
+  image         String   // URL изображения
+  icon          String?  // Emoji или иконка
+  
+  holdings      Int      @default(1)
+  avgBuyPrice   Float    // Средняя цена покупки
+  purchaseDate  DateTime @default(now())
+  
+  // Кэш изменений цен (обновляется из API)
+  currentPrice  Float
+  priceChange24h Float   @default(0)
+  priceChange7d  Float   @default(0)
+  priceChange30d Float   @default(0)
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  priceHistories PriceHistory[]
+  
+  @@index([userId])
+}
+
+// История цен для графика
+model PriceHistory {
+  id               String   @id @default(cuid())
+  userId           String?
+  user             User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  portfolioItemId  String?
+  portfolioItem    PortfolioItem? @relation(fields: [portfolioItemId], references: [id], onDelete: Cascade)
+  
+  date             DateTime @default(now())
+  totalValue       Float    // Общая стоимость портфеля на эту дату
+  totalInvested    Float    // Общая инвестированная сумма
+  
+  @@index([userId, date])
+  @@index([portfolioItemId, date])
+}
