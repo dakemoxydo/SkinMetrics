@@ -1,4 +1,4 @@
-// TypeScript интерфейсы для CS2 Portfolio Tracker
+// TypeScript интерфейсы для SkinMetrics
 
 /** Категории предметов CS2 */
 export type ItemCategory = 

@@ -1,6 +1,6 @@
 import { PortfolioItem, ItemCategory } from './types';
 
-/** Моковые данные предметов CS2 */
+/** Моковые данные предметов для SkinMetrics */
 export const mockItems: PortfolioItem[] = [
   {
     id: '1',

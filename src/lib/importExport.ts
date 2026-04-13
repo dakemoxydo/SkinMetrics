@@ -53,7 +53,7 @@ export function exportToCSV(items: PortfolioItem[]): void {
   const url = URL.createObjectURL(blob);
   
   link.setAttribute('href', url);
-  link.setAttribute('download', `cs2-portfolio-${new Date().toISOString().split('T')[0]}.csv`);
+  link.setAttribute('download', `skinmetrics-${new Date().toISOString().split('T')[0]}.csv`);
   link.style.visibility = 'hidden';
   
   document.body.appendChild(link);

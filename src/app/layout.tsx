@@ -5,8 +5,8 @@ import { PortfolioProvider } from "@/store/portfolioStore";
 import { ToastProvider } from "@/components/ui/Toast";
 
 export const metadata: Metadata = {
-  title: "CS2 Portfolio Tracker — Отслеживание инвестиционного портфеля",
-  description: "Отслеживайте стоимость, прибыль и ROI вашего портфеля предметов CS2",
+  title: "SkinMetrics — Отслеживание инвестиционного портфеля",
+  description: "Отслеживайте стоимость, прибыль и ROI вашего портфеля предметов CS2 с помощью SkinMetrics",
 };
 
 export default function RootLayout({

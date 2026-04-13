@@ -61,10 +61,10 @@ export default function Header() {
           {/* Logo */}
           <Link href="/" className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-              <span className="text-white font-bold text-sm">CS2</span>
+              <span className="text-white font-bold text-sm">SM</span>
             </div>
             <span className="text-lg font-semibold text-slate-100 hidden sm:inline">
-              Portfolio Tracker
+              SkinMetrics
             </span>
           </Link>
 
