@@ -1,8 +1,5 @@
 'use client';
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
-
 import Header from '@/components/layout/Header';
 import { CategoryDistribution } from '@/components/analytics/CategoryDistribution';
 import { TopPerformers } from '@/components/analytics/TopPerformers';

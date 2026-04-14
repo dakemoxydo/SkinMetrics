@@ -1,16 +1,12 @@
-// Shim for React 19 useSyncExternalStore compatibility
 import * as React from 'react';
 
-// @ts-ignore
 if (typeof React.useSyncExternalStore !== 'function') {
-  // @ts-ignore
-  React.useSyncExternalStore = function <State>(
-    subscribe: (onStoreChange: () => void) => () => void,
-    getSnapshot: () => State,
-    getServerSnapshot?: () => State
+  // @ts-expect-error Runtime shim for React versions without useSyncExternalStore.
+  React.useSyncExternalStore = function useSyncExternalStoreShim<State>(
+    _subscribe: (onStoreChange: () => void) => () => void,
+    getSnapshot: () => State
   ): State {
-    const state = getSnapshot();
-    return state;
+    return getSnapshot();
   };
 }
 

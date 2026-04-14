@@ -1,0 +1,84 @@
+# Docker Compose для production
+# Использование: docker-compose -f docker-compose.prod.yml up -d
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: skinmetrics-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-skinmetrics}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-change_me_in_production}
+      POSTGRES_DB: ${DB_NAME:-skinmetrics}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-skinmetrics}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - skinmetrics-network
+
+  # Redis Cache (для кэширования сессий и rate limiting)
+  redis:
+    image: redis:7-alpine
+    container_name: skinmetrics-redis
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD:-change_me}
+    volumes:
+      - redis_data:/data
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-change_me}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - skinmetrics-network
+
+  # Next.js Application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: skinmetrics-app
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-skinmetrics}:${DB_PASSWORD:-change_me_in_production}@postgres:5432/${DB_NAME:-skinmetrics}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-change_me_in_production}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-change_me}@redis:6379
+      CRON_SECRET: ${CRON_SECRET:-change_me}
+      NODE_ENV: production
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - skinmetrics-network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  skinmetrics-network:
+    driver: bridge

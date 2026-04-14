@@ -1,7 +1,4 @@
-// TypeScript интерфейсы для SkinMetrics
-
-/** Категории предметов CS2 */
-export type ItemCategory = 
+export type ItemCategory =
   | 'knife'
   | 'case'
   | 'skin'
@@ -11,13 +8,10 @@ export type ItemCategory =
   | 'weapon'
   | 'other';
 
-/** Валюты */
 export type Currency = 'RUB' | 'USD' | 'EUR';
 
-/** Период для графика */
 export type ChartPeriod = '24H' | '7D' | '30D' | '90D' | '6M' | '1Y' | 'ALL';
 
-/** Предмет в портфеле */
 export interface PortfolioItem {
   id: string;
   name: string;
@@ -35,14 +29,12 @@ export interface PortfolioItem {
   updatedAt: Date;
 }
 
-/** Точка данных для графика */
 export interface ChartDataPoint {
   date: string;
   currentValue: number;
   investedValue: number;
 }
 
-/** Статистика портфеля */
 export interface PortfolioStats {
   totalValue: number;
   totalInvested: number;
@@ -53,7 +45,6 @@ export interface PortfolioStats {
   worstItem?: PortfolioItem & { profit: number; roi: number };
 }
 
-/** Данные для формы добавления предмета */
 export interface AddItemFormData {
   name: string;
   category: ItemCategory;
@@ -64,7 +55,6 @@ export interface AddItemFormData {
   purchaseDate: Date;
 }
 
-/** Данные пользователя */
 export interface UserData {
   id: string;
   email: string;
@@ -72,7 +62,6 @@ export interface UserData {
   currency: Currency;
 }
 
-/** Ответ API */
 export interface ApiResponse<T = unknown> {
   success: boolean;
   data?: T;
@@ -80,7 +69,6 @@ export interface ApiResponse<T = unknown> {
   message?: string;
 }
 
-/** Сортировка таблицы */
 export type SortDirection = 'asc' | 'desc';
 
 export interface SortConfig {
@@ -88,28 +76,24 @@ export interface SortConfig {
   direction: SortDirection;
 }
 
-/** Фильтры для таблицы */
 export interface TableFilters {
   search: string;
   category: ItemCategory | 'all';
   sort: SortConfig;
 }
 
-/** Курсы валют (относительно RUB) */
 export const EXCHANGE_RATES: Record<Currency, number> = {
   RUB: 1,
   USD: 96.5,
   EUR: 105.2,
 };
 
-/** Символы валют */
 export const CURRENCY_SYMBOLS: Record<Currency, string> = {
   RUB: '₽',
   USD: '$',
   EUR: '€',
 };
 
-/** Названия категорий */
 export const CATEGORY_NAMES: Record<ItemCategory, string> = {
   knife: 'Нож',
   case: 'Кейс',
@@ -121,7 +105,6 @@ export const CATEGORY_NAMES: Record<ItemCategory, string> = {
   other: 'Другое',
 };
 
-/** Иконки категорий (emoji) */
 export const CATEGORY_ICONS: Record<ItemCategory, string> = {
   knife: '🔪',
   case: '📦',

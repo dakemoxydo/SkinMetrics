@@ -1,9 +1,53 @@
 import { PortfolioItem } from '@/lib/types';
 import { getGlobalDispatch } from '@/store/portfolioStore';
+import { createPortfolioItem } from '@/lib/api';
+import { isItemCategory } from '@/lib/portfolioItems';
 
-/** Экспорт портфеля в CSV */
+type ImportedItemInput = {
+  name: string;
+  category: PortfolioItem['category'];
+  image?: string;
+  icon?: string;
+  currentPrice?: number;
+  holdings: number;
+  avgBuyPrice: number;
+  purchaseDate?: string;
+};
+
+function mapImportedItem(item: Record<string, unknown>): ImportedItemInput | null {
+  if (
+    typeof item.name !== 'string' ||
+    !isItemCategory(item.category) ||
+    typeof item.holdings !== 'number' ||
+    typeof item.avgBuyPrice !== 'number'
+  ) {
+    return null;
+  }
+
+  return {
+    name: item.name,
+    category: item.category,
+    image: typeof item.image === 'string' ? item.image : '',
+    icon: typeof item.icon === 'string' ? item.icon : '📦',
+    currentPrice: typeof item.currentPrice === 'number' ? item.currentPrice : item.avgBuyPrice,
+    holdings: item.holdings,
+    avgBuyPrice: item.avgBuyPrice,
+    purchaseDate: item.purchaseDate ? new Date(String(item.purchaseDate)).toISOString() : new Date().toISOString(),
+  };
+}
+
+async function parseJsonFile(file: File): Promise<Array<Record<string, unknown>>> {
+  const content = await file.text();
+  const data = JSON.parse(content) as Array<Record<string, unknown>>;
+
+  if (!Array.isArray(data)) {
+    throw new Error('Invalid import format');
+  }
+
+  return data;
+}
+
 export function exportToCSV(items: PortfolioItem[]): void {
-  // Заголовки
   const headers = [
     'Название',
     'Категория',
@@ -19,11 +63,10 @@ export function exportToCSV(items: PortfolioItem[]): void {
     'Дата покупки',
   ];
 
-  // Данные
   const rows = items.map((item) => {
     const value = item.currentPrice * item.holdings;
     const profit = (item.currentPrice - item.avgBuyPrice) * item.holdings;
-    const roi = ((item.currentPrice - item.avgBuyPrice) / item.avgBuyPrice) * 100;
+    const roi = item.avgBuyPrice > 0 ? ((item.currentPrice - item.avgBuyPrice) / item.avgBuyPrice) * 100 : 0;
 
     return [
       item.name,
@@ -41,27 +84,24 @@ export function exportToCSV(items: PortfolioItem[]): void {
     ];
   });
 
-  // Формирование CSV
   const csvContent = [
     headers.join(','),
     ...rows.map((row) => row.map((cell) => `"${cell}"`).join(',')),
   ].join('\n');
 
-  // Добавляем BOM для корректного отображения кириллицы в Excel
   const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
   const link = document.createElement('a');
   const url = URL.createObjectURL(blob);
-  
+
   link.setAttribute('href', url);
   link.setAttribute('download', `skinmetrics-${new Date().toISOString().split('T')[0]}.csv`);
   link.style.visibility = 'hidden';
-  
+
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
 }
 
-/** Экспорт портфеля в JSON */
 export function exportToJSON(items: PortfolioItem[]): string {
   const data = items.map((item) => ({
     ...item,
@@ -73,89 +113,88 @@ export function exportToJSON(items: PortfolioItem[]): string {
   return JSON.stringify(data, null, 2);
 }
 
-/** Импорт портфеля из JSON */
-export async function importFromJSON(file: File): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    
-    reader.onload = (e) => {
-      try {
-        const content = e.target?.result as string;
-        const data = JSON.parse(content) as Array<Record<string, unknown>>;
+export async function importFromJSON(
+  file: File,
+  options?: { persistToServer?: boolean }
+): Promise<number> {
+  const data = await parseJsonFile(file);
+  const importedItems = data
+    .map((item) => mapImportedItem(item))
+    .filter((item): item is ImportedItemInput => item !== null);
 
-        if (!Array.isArray(data)) {
-          reject(new Error('Неверный формат данных'));
-          return;
-        }
+  if (importedItems.length === 0) {
+    throw new Error('No valid items found in import file');
+  }
 
-        const dispatch = getGlobalDispatch();
-        if (!dispatch) {
-          reject(new Error('Dispatch не инициализирован'));
-          return;
-        }
+  if (options?.persistToServer) {
+    await Promise.all(
+      importedItems.map((item) =>
+        createPortfolioItem({
+          ...item,
+          marketHashName: item.name,
+        })
+      )
+    );
+    return importedItems.length;
+  }
 
-        data.forEach((item) => {
-          if (item.name && item.category && item.holdings && item.avgBuyPrice) {
-            dispatch({
-              type: 'ADD_ITEM',
-              payload: {
-                id: Date.now().toString() + Math.random(),
-                name: item.name as string,
-                category: item.category as any,
-                image: (item.image as string) || '',
-                icon: (item.icon as string) || '📦',
-                currentPrice: (item.currentPrice as number) || (item.avgBuyPrice as number),
-                holdings: item.holdings as number,
-                avgBuyPrice: item.avgBuyPrice as number,
-                purchaseDate: item.purchaseDate ? new Date(item.purchaseDate as string) : new Date(),
-                priceChange24h: 0,
-                priceChange7d: 0,
-                priceChange30d: 0,
-                createdAt: new Date(),
-                updatedAt: new Date(),
-              },
-            });
-          }
-        });
+  const dispatch = getGlobalDispatch();
+  if (!dispatch) {
+    throw new Error('Portfolio store is not initialized');
+  }
 
-        resolve();
-      } catch (error) {
-        reject(error);
-      }
-    };
-
-    reader.onerror = () => reject(new Error('Ошибка чтения файла'));
-    reader.readAsText(file);
+  importedItems.forEach((item) => {
+    dispatch({
+      type: 'ADD_ITEM',
+      payload: {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        name: item.name,
+        category: item.category,
+        image: item.image || '',
+        icon: item.icon,
+        currentPrice: item.currentPrice ?? item.avgBuyPrice,
+        holdings: item.holdings,
+        avgBuyPrice: item.avgBuyPrice,
+        purchaseDate: new Date(item.purchaseDate ?? new Date().toISOString()),
+        priceChange24h: 0,
+        priceChange7d: 0,
+        priceChange30d: 0,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    });
   });
+
+  return importedItems.length;
 }
 
-/** Импорт портфеля из JSON строки */
 export function importFromJSONString(jsonString: string): void {
   const data = JSON.parse(jsonString) as Array<Record<string, unknown>>;
   const dispatch = getGlobalDispatch();
   if (!dispatch) return;
 
   data.forEach((item) => {
-    if (item.name && item.category && item.holdings && item.avgBuyPrice) {
-      dispatch({
-        type: 'ADD_ITEM',
-        payload: {
-          id: Date.now().toString() + Math.random(),
-          name: item.name as string,
-          category: item.category as any,
-          image: (item.image as string) || '',
-          icon: (item.icon as string) || '📦',
-          currentPrice: (item.currentPrice as number) || (item.avgBuyPrice as number),
-          holdings: item.holdings as number,
-          avgBuyPrice: item.avgBuyPrice as number,
-          purchaseDate: item.purchaseDate ? new Date(item.purchaseDate as string) : new Date(),
-          priceChange24h: 0,
-          priceChange7d: 0,
-          priceChange30d: 0,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      });
-    }
+    const mappedItem = mapImportedItem(item);
+    if (!mappedItem) return;
+
+    dispatch({
+      type: 'ADD_ITEM',
+      payload: {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        name: mappedItem.name,
+        category: mappedItem.category,
+        image: mappedItem.image || '',
+        icon: mappedItem.icon,
+        currentPrice: mappedItem.currentPrice ?? mappedItem.avgBuyPrice,
+        holdings: mappedItem.holdings,
+        avgBuyPrice: mappedItem.avgBuyPrice,
+        purchaseDate: new Date(mappedItem.purchaseDate ?? new Date().toISOString()),
+        priceChange24h: 0,
+        priceChange7d: 0,
+        priceChange30d: 0,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    });
   });
 }

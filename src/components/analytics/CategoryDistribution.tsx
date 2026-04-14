@@ -3,21 +3,19 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { usePortfolioStore } from '@/store/portfolioStore';
 import { CATEGORY_NAMES, CATEGORY_ICONS } from '@/lib/types';
-import { calculateItemProfit } from '@/lib/utils';
 import { ItemCategory } from '@/lib/types';
 import {
   PieChart,
   Pie,
   Cell,
   ResponsiveContainer,
-  Legend,
   Tooltip,
 } from 'recharts';
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 
 export function CategoryDistribution() {
-  const { items, currency } = usePortfolioStore();
+  const { items } = usePortfolioStore();
 
   // Группировка по категориям
   const categoryData = items.reduce<Record<string, { name: string; value: number; icon: string }>>(

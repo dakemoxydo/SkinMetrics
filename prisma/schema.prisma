@@ -1,67 +1,228 @@
-// Prisma schema for CS2 Portfolio Tracker
+// Prisma schema for CS2 Portfolio Tracker (SkinMetrics)
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
 }
 
-// Модель пользователя
+/// Application user compatible with NextAuth
 model User {
-  id            String          @id @default(cuid())
-  email         String          @unique
-  name          String?
-  password      String
-  currency      String          @default("RUB") // RUB, USD, EUR
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-  portfolioItems PortfolioItem[]
-  priceHistories PriceHistory[]
+  id               String           @id @default(cuid())
+  name             String?
+  email            String?          @unique
+  emailVerified    DateTime?
+  image            String?
+  currency         String           @default("RUB") // RUB, USD, EUR
+  theme            String           @default("dark") // dark, light
+  language         String           @default("ru") // ru, en
+  portfolioPublic  Boolean          @default(false)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  portfolioItems   PortfolioItem[]
+  priceHistories   PriceHistory[]
+  transactions     Transaction[]
+  priceAlerts      PriceAlert[]
+  wishlistItems    WishlistItem[]
+  accounts         Account[]
+  sessions         Session[]
+  portfolioShares  PortfolioShare[]
+
+  @@map("users")
 }
 
-// Предмет в портфеле пользователя
+/// NextAuth Account
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+/// NextAuth Session
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+/// NextAuth Verification Token
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+/// Portfolio item snapshot for the user
 model PortfolioItem {
-  id            String   @id @default(cuid())
-  userId        String
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  name          String
-  category      String   // knife, case, skin, sticker, charm, etc.
-  image         String   // URL изображения
-  icon          String?  // Emoji или иконка
-  
-  holdings      Int      @default(1)
-  avgBuyPrice   Float    // Средняя цена покупки
-  purchaseDate  DateTime @default(now())
-  
-  // Кэш изменений цен (обновляется из API)
-  currentPrice  Float
-  priceChange24h Float   @default(0)
-  priceChange7d  Float   @default(0)
-  priceChange30d Float   @default(0)
-  
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  
-  priceHistories PriceHistory[]
-  
+  id               String           @id @default(cuid())
+  userId           String
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name             String
+  category         String           // knife, case, skin, sticker, charm, gloves, weapon, other
+  image            String           // Item image URL
+  icon             String?          // Emoji or compact icon
+  marketHashName   String?          // Steam Market name
+
+  holdings         Int              @default(1)
+  avgBuyPrice      Float            // Average buy price
+  purchaseDate     DateTime         @default(now())
+
+  // Cached price data refreshed from external market APIs
+  currentPrice     Float            @default(0)
+  priceChange24h   Float            @default(0)
+  priceChange7d    Float            @default(0)
+  priceChange30d   Float            @default(0)
+
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  priceHistories   PriceHistory[]
+  transactions     Transaction[]
+  priceAlerts      PriceAlert[]
+  wishlistItems    WishlistItem[]
+
   @@index([userId])
+  @@index([category])
+  @@map("portfolio_items")
 }
 
-// История цен для графика
+/// Historical portfolio or item values for charts
 model PriceHistory {
-  id               String   @id @default(cuid())
+  id               String           @id @default(cuid())
   userId           String?
-  user             User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user             User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
   portfolioItemId  String?
-  portfolioItem    PortfolioItem? @relation(fields: [portfolioItemId], references: [id], onDelete: Cascade)
-  
-  date             DateTime @default(now())
-  totalValue       Float    // Общая стоимость портфеля на эту дату
-  totalInvested    Float    // Общая инвестированная сумма
-  
+  portfolioItem    PortfolioItem?   @relation(fields: [portfolioItemId], references: [id], onDelete: SetNull)
+
+  date             DateTime         @default(now())
+  totalValue       Float            // Portfolio value at the recorded time
+  totalInvested    Float            // Invested amount at the recorded time
+
   @@index([userId, date])
   @@index([portfolioItemId, date])
+  @@map("price_histories")
+}
+
+/// Transaction ledger for buys and sells
+model Transaction {
+  id               String           @id @default(cuid())
+  userId           String
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  portfolioItemId  String?
+  portfolioItem    PortfolioItem?   @relation(fields: [portfolioItemId], references: [id], onDelete: SetNull)
+
+  type             String           // buy, sell
+  quantity         Int
+  price            Float            // Unit price
+  totalPrice       Float            // quantity * price
+  fee              Float            @default(0) // Optional marketplace fee
+  notes            String?          // Free-form notes
+  transactionDate  DateTime         @default(now())
+  createdAt        DateTime         @default(now())
+
+  @@index([userId])
+  @@index([portfolioItemId])
+  @@index([transactionDate])
+  @@map("transactions")
+}
+
+/// Price alert configuration
+model PriceAlert {
+  id               String           @id @default(cuid())
+  userId           String
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  portfolioItemId  String?
+  portfolioItem    PortfolioItem?   @relation(fields: [portfolioItemId], references: [id], onDelete: SetNull)
+
+  itemName         String           // Item name if the portfolio item is deleted
+  marketHashName   String           // Steam Market name
+  thresholdPercent Float            // Alert threshold in percent
+  direction        String           // up, down
+  isActive         Boolean          @default(true)
+  triggeredAt      DateTime?        // When the alert last triggered
+  createdAt        DateTime         @default(now())
+
+  @@index([userId])
+  @@index([isActive])
+  @@map("price_alerts")
+}
+
+/// Wishlist item
+model WishlistItem {
+  id               String           @id @default(cuid())
+  userId           String
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  portfolioItemId  String?          // Linked portfolio item when acquired
+  portfolioItem    PortfolioItem?   @relation(fields: [portfolioItemId], references: [id], onDelete: SetNull)
+
+  name             String
+  marketHashName   String
+  image            String?
+  icon             String?
+  category         String
+  targetPrice      Float?           // Desired buy price
+  currentPrice     Float            @default(0)
+  notes            String?
+
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@index([userId])
+  @@map("wishlist_items")
+}
+
+/// Cached Steam Market price entry
+model PriceCache {
+  id               String           @id @default(cuid())
+  marketHashName   String           @unique
+  price            Float
+  currency         String           @default("RUB")
+  volume           Int              @default(0) // Sales volume
+  lastUpdated      DateTime         @default(now())
+  expiresAt        DateTime         // Cache expiry time
+
+  @@index([expiresAt])
+  @@map("price_cache")
+}
+
+/// Public share link for a portfolio
+model PortfolioShare {
+  id               String           @id @default(cuid())
+  userId           String
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  shareId          String           @unique // Public share token
+  title            String?          // Optional label
+  isPublic         Boolean          @default(true)
+  expiresAt        DateTime?        // Optional expiration time
+
+  createdAt        DateTime         @default(now())
+
+  @@index([userId])
+  @@index([shareId])
+  @@map("portfolio_shares")
 }

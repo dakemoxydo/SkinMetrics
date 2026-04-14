@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { usePortfolioStore } from '@/store/portfolioStore';
 import { generateChartData, formatChartDate } from '@/lib/utils';
 import { ChartPeriod } from '@/lib/types';
-import { calculateTotalValue, calculateTotalInvested } from '@/lib/utils';
+import { calculateTotalInvested } from '@/lib/utils';
 import {
   AreaChart,
   Area,

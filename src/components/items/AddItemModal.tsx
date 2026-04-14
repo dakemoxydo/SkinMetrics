@@ -1,13 +1,19 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { usePortfolioStore } from '@/store/portfolioStore';
 import { useToast } from '@/components/ui/Toast';
-import { PortfolioItem, ItemCategory, AddItemFormData } from '@/lib/types';
+import {
+  PortfolioItem,
+  ItemCategory,
+  AddItemFormData,
+  CATEGORY_ICONS,
+  CATEGORY_NAMES,
+} from '@/lib/types';
 import { availableItems } from '@/lib/mockData';
 import { Search } from 'lucide-react';
 
@@ -17,129 +23,135 @@ interface AddItemModalProps {
   editItem?: PortfolioItem | null;
 }
 
-const categoryOptions = [
-  { value: 'knife', label: '🔪 Нож' },
-  { value: 'case', label: '📦 Кейс' },
-  { value: 'skin', label: '🎨 Скин' },
-  { value: 'sticker', label: '🏷️ Стикер' },
-  { value: 'charm', label: '✨ Шарм' },
-  { value: 'gloves', label: '🧤 Перчатки' },
-  { value: 'weapon', label: '🔫 Оружие' },
-  { value: 'other', label: '📌 Другое' },
-];
+const categoryOptions = (Object.keys(CATEGORY_NAMES) as ItemCategory[]).map((category) => ({
+  value: category,
+  label: `${CATEGORY_ICONS[category]} ${CATEGORY_NAMES[category]}`,
+}));
+
+function createFormData(editItem?: PortfolioItem | null): AddItemFormData {
+  if (editItem) {
+    return {
+      name: editItem.name,
+      category: editItem.category,
+      image: editItem.image,
+      icon: editItem.icon,
+      holdings: editItem.holdings,
+      avgBuyPrice: editItem.avgBuyPrice,
+      purchaseDate: editItem.purchaseDate,
+    };
+  }
+
+  return {
+    name: '',
+    category: 'case',
+    image: '',
+    icon: CATEGORY_ICONS.case,
+    holdings: 1,
+    avgBuyPrice: 0,
+    purchaseDate: new Date(),
+  };
+}
 
 export function AddItemModal({ isOpen, onClose, editItem }: AddItemModalProps) {
   const { addItem, updateItem } = usePortfolioStore();
   const toast = useToast();
-
-  const [formData, setFormData] = useState<AddItemFormData>({
-    name: '',
-    category: 'case',
-    image: '',
-    icon: '📦',
-    holdings: 1,
-    avgBuyPrice: 0,
-    purchaseDate: new Date(),
-  });
-
+  const [formData, setFormData] = useState<AddItemFormData>(() => createFormData(editItem));
   const [errors, setErrors] = useState<Partial<Record<keyof AddItemFormData, string>>>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Заполнить форму при редактировании
   useEffect(() => {
-    if (editItem) {
-      setFormData({
-        name: editItem.name,
-        category: editItem.category,
-        image: editItem.image,
-        icon: editItem.icon,
-        holdings: editItem.holdings,
-        avgBuyPrice: editItem.avgBuyPrice,
-        purchaseDate: editItem.purchaseDate,
-      });
-    } else {
-      setFormData({
-        name: '',
-        category: 'case',
-        image: '',
-        icon: '📦',
-        holdings: 1,
-        avgBuyPrice: 0,
-        purchaseDate: new Date(),
-      });
-    }
-    setErrors({});
+    if (!isOpen) return;
+    setFormData(createFormData(editItem));
     setSearchQuery('');
+    setShowSuggestions(false);
+    setErrors({});
   }, [editItem, isOpen]);
 
-  // Фильтрация подсказок
-  const suggestions = searchQuery
-    ? availableItems.filter((item) =>
-        item.name.toLowerCase().includes(searchQuery.toLowerCase())
-      ).slice(0, 5)
-    : [];
+  const suggestions = useMemo(
+    () =>
+      searchQuery
+        ? availableItems
+            .filter((item) => item.name.toLowerCase().includes(searchQuery.toLowerCase()))
+            .slice(0, 5)
+        : [],
+    [searchQuery]
+  );
 
-  const handleSelectItem = (item: typeof availableItems[0]) => {
-    setFormData({
-      ...formData,
+  const handleSelectItem = (item: (typeof availableItems)[number]) => {
+    setFormData((prev) => ({
+      ...prev,
       name: item.name,
       category: item.category,
       icon: item.icon,
       image: item.image,
-    });
+    }));
     setSearchQuery('');
     setShowSuggestions(false);
   };
 
   const validate = (): boolean => {
-    const newErrors: Partial<Record<keyof AddItemFormData, string>> = {};
+    const nextErrors: Partial<Record<keyof AddItemFormData, string>> = {};
 
     if (!formData.name.trim()) {
-      newErrors.name = 'Название обязательно';
+      nextErrors.name = 'Название обязательно';
     }
     if (formData.holdings < 1) {
-      newErrors.holdings = 'Количество должно быть больше 0';
+      nextErrors.holdings = 'Количество должно быть больше 0';
     }
     if (formData.avgBuyPrice < 0) {
-      newErrors.avgBuyPrice = 'Цена не может быть отрицательной';
+      nextErrors.avgBuyPrice = 'Цена не может быть отрицательной';
     }
 
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
 
     if (!validate()) return;
 
-    if (editItem) {
-      updateItem(editItem.id, {
-        name: formData.name,
-        category: formData.category,
-        image: formData.image,
-        icon: formData.icon,
-        holdings: formData.holdings,
-        avgBuyPrice: formData.avgBuyPrice,
-        purchaseDate: formData.purchaseDate,
-      });
-      toast.success(`"${formData.name}" обновлен`);
-    } else {
-      addItem({
-        name: formData.name,
-        category: formData.category,
-        image: formData.image,
-        icon: formData.icon,
-        currentPrice: availableItems.find((i) => i.name === formData.name)?.currentPrice || formData.avgBuyPrice,
-        holdings: formData.holdings,
-        avgBuyPrice: formData.avgBuyPrice,
-        purchaseDate: formData.purchaseDate,
-      });
-      toast.success(`"${formData.name}" добавлен в портфель`);
-    }
+    setIsSubmitting(true);
+    try {
+      if (editItem) {
+        await updateItem(editItem.id, {
+          name: formData.name,
+          category: formData.category,
+          image: formData.image,
+          icon: formData.icon,
+          holdings: formData.holdings,
+          avgBuyPrice: formData.avgBuyPrice,
+          purchaseDate: formData.purchaseDate,
+        });
+        toast.success(`"${formData.name}" обновлен`);
+      } else {
+        await addItem({
+          name: formData.name,
+          category: formData.category,
+          image: formData.image,
+          icon: formData.icon,
+          currentPrice:
+            availableItems.find((item) => item.name === formData.name)?.currentPrice ||
+            formData.avgBuyPrice,
+          holdings: formData.holdings,
+          avgBuyPrice: formData.avgBuyPrice,
+          purchaseDate: formData.purchaseDate,
+        });
+        toast.success(`"${formData.name}" добавлен в портфель`);
+      }
 
-    onClose();
+      onClose();
+    } catch (error) {
+      const fallbackMessage = editItem
+        ? 'Не удалось обновить предмет. Если у него есть история сделок, редактируйте транзакции отдельно.'
+        : 'Не удалось добавить предмет';
+      const message = error instanceof Error ? error.message : fallbackMessage;
+      toast.error(message || fallbackMessage);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -147,40 +159,42 @@ export function AddItemModal({ isOpen, onClose, editItem }: AddItemModalProps) {
       isOpen={isOpen}
       onClose={onClose}
       title={editItem ? 'Редактировать предмет' : 'Добавить предмет'}
-      description={editItem ? 'Измените информацию о предмете' : 'Заполните информацию о новом предмете'}
+      description={
+        editItem
+          ? 'Измените информацию о предмете.'
+          : 'Заполните информацию о новом предмете.'
+      }
       size="lg"
     >
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Поиск предмета */}
         <div className="relative">
           <Input
             label="Поиск предмета"
             placeholder="Начните вводить название..."
             value={searchQuery || formData.name}
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
-              setFormData({ ...formData, name: e.target.value });
+            onChange={(event) => {
+              setSearchQuery(event.target.value);
+              setFormData((prev) => ({ ...prev, name: event.target.value }));
               setShowSuggestions(true);
             }}
             onFocus={() => setShowSuggestions(true)}
             icon={<Search className="w-4 h-4" />}
           />
-          
-          {/* Подсказки */}
+
           {showSuggestions && suggestions.length > 0 && (
-            <div className="absolute z-10 w-full mt-1 bg-slate-800 border border-slate-700 rounded-lg shadow-lg">
+            <div className="absolute z-10 mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 shadow-lg">
               {suggestions.map((item) => (
                 <button
                   key={item.name}
                   type="button"
-                  className="w-full text-left px-4 py-2 hover:bg-slate-700/50 transition-colors first:rounded-t-lg last:rounded-b-lg"
+                  className="w-full rounded-none px-4 py-2 text-left transition-colors hover:bg-slate-700/50 first:rounded-t-lg last:rounded-b-lg"
                   onClick={() => handleSelectItem(item)}
                 >
                   <div className="flex items-center gap-2">
                     <span className="text-lg">{item.icon}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-slate-100 truncate">{item.name}</p>
-                      <p className="text-xs text-slate-400">{item.category}</p>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm text-slate-100">{item.name}</p>
+                      <p className="text-xs text-slate-400">{CATEGORY_NAMES[item.category]}</p>
                     </div>
                   </div>
                 </button>
@@ -189,34 +203,38 @@ export function AddItemModal({ isOpen, onClose, editItem }: AddItemModalProps) {
           )}
         </div>
 
-        {/* Название */}
         <Input
           label="Название предмета"
           value={formData.name}
-          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+          onChange={(event) => setFormData((prev) => ({ ...prev, name: event.target.value }))}
           error={errors.name}
           required
         />
 
-        {/* Категория */}
         <Select
           label="Категория"
           options={categoryOptions}
           value={formData.category}
-          onChange={(e) =>
-            setFormData({ ...formData, category: e.target.value as ItemCategory })
+          onChange={(event) =>
+            setFormData((prev) => ({
+              ...prev,
+              category: event.target.value as ItemCategory,
+              icon: CATEGORY_ICONS[event.target.value as ItemCategory],
+            }))
           }
         />
 
-        {/* Количество и цена */}
         <div className="grid grid-cols-2 gap-4">
           <Input
             label="Количество"
             type="number"
             min="1"
             value={formData.holdings}
-            onChange={(e) =>
-              setFormData({ ...formData, holdings: parseInt(e.target.value) || 1 })
+            onChange={(event) =>
+              setFormData((prev) => ({
+                ...prev,
+                holdings: parseInt(event.target.value, 10) || 1,
+              }))
             }
             error={errors.holdings}
             required
@@ -227,30 +245,31 @@ export function AddItemModal({ isOpen, onClose, editItem }: AddItemModalProps) {
             min="0"
             step="0.01"
             value={formData.avgBuyPrice}
-            onChange={(e) =>
-              setFormData({ ...formData, avgBuyPrice: parseFloat(e.target.value) || 0 })
+            onChange={(event) =>
+              setFormData((prev) => ({
+                ...prev,
+                avgBuyPrice: parseFloat(event.target.value) || 0,
+              }))
             }
             error={errors.avgBuyPrice}
             required
           />
         </div>
 
-        {/* Дата покупки */}
         <Input
           label="Дата покупки"
           type="date"
           value={formData.purchaseDate.toISOString().split('T')[0]}
-          onChange={(e) =>
-            setFormData({ ...formData, purchaseDate: new Date(e.target.value) })
+          onChange={(event) =>
+            setFormData((prev) => ({ ...prev, purchaseDate: new Date(event.target.value) }))
           }
         />
 
-        {/* Кнопки */}
         <div className="flex justify-end gap-3 pt-4">
           <Button type="button" variant="outline" onClick={onClose}>
             Отмена
           </Button>
-          <Button type="submit">
+          <Button type="submit" loading={isSubmitting}>
             {editItem ? 'Сохранить' : 'Добавить'}
           </Button>
         </div>
